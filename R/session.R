@@ -246,7 +246,8 @@ html_table.rvest_session <- function(
   fill = deprecated(),
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
   html_table(
     read_html(x),
@@ -255,7 +256,8 @@ html_table.rvest_session <- function(
     fill = fill,
     dec = dec,
     na.strings = na.strings,
-    convert = convert
+    convert = convert,
+    trace = trace
   )
 }
 

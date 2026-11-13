@@ -27,10 +27,24 @@
 #'    if `convert` is `TRUE`.
 #' @param convert If `TRUE`, will run [`type.convert()`] to interpret texts as
 #'    logical, integer, double, or `NA`.
+#' @param trace If `TRUE`, additionally return source provenance for every
+#'   cell in the output. The result becomes an `rvest_table_trace` list with
+#'   components `data` (the usual tibble), `cells` (a registry of every
+#'   source `td`/`th` with a stable in-table id, its coverage, raw text, and
+#'   associated header ids), `body` (a matrix of cell ids aligned with the
+#'   rows and columns of `data`), and `problems` (a character vector of
+#'   diagnostics, e.g. dangling `headers` references or duplicate element
+#'   ids). Cell ids have the form `r{row}c{col}` for the anchor position of
+#'   each cell; `NA` slots in `body` are padded missing cells. Explicit
+#'   `headers` attributes take precedence over `scope`-based association,
+#'   and cells with no associated headers contain an empty character vector.
 #' @return
 #' When applied to a single element, `html_table()` returns a single tibble.
 #' When applied to multiple elements or a document, `html_table()` returns
 #' a list of tibbles.
+#'
+#' If `trace = TRUE`, each tibble is instead wrapped in an
+#' `rvest_table_trace` list as described in the `trace` argument.
 #' @export
 #' @examples
 #' sample1 <- minimal_html("<table>
@@ -73,6 +87,18 @@
 #' </table>")
 #' sample4 |> html_element("table") |> html_table()
 #' sample4 |> html_element("table") |> html_table2()
+#'
+#' # Use trace = TRUE to keep the source provenance of every value
+#' sample5 <- minimal_html("<table>
+#'   <tr><th scope='col'>a</th><th scope='col'>b</th></tr>
+#'   <tr><td rowspan='2'>1</td><td>2</td></tr>
+#'   <tr><td>3</td></tr>
+#' </table>")
+#' traced <- sample5 |>
+#'   html_element("table") |>
+#'   html_table(trace = TRUE)
+#' traced$body
+#' traced$cells
 html_table <- function(
   x,
   header = NA,
@@ -80,13 +106,15 @@ html_table <- function(
   fill = deprecated(),
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
   check_bool(header, allow_na = TRUE)
   check_bool(trim)
   check_string(dec)
   check_character(na.strings)
   check_bool(convert)
+  check_bool(trace)
 
   UseMethod("html_table")
 }
@@ -99,7 +127,8 @@ html_table.xml_document <- function(
   fill = deprecated(),
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
   tables <- xml2::xml_find_all(x, ".//table")
   html_table(
@@ -109,7 +138,8 @@ html_table.xml_document <- function(
     fill = fill,
     dec = dec,
     na.strings = na.strings,
-    convert = convert
+    convert = convert,
+    trace = trace
   )
 }
 
@@ -121,7 +151,8 @@ html_table.xml_nodeset <- function(
   fill = deprecated(),
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
   lapply(
     x,
@@ -131,7 +162,8 @@ html_table.xml_nodeset <- function(
     fill = fill,
     dec = dec,
     na.strings = na.strings,
-    convert = convert
+    convert = convert,
+    trace = trace
   )
 }
 
@@ -143,7 +175,8 @@ html_table.xml_node <- function(
   fill = deprecated(),
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
   if (lifecycle::is_present(fill)) {
     lifecycle::deprecate_warn(
@@ -154,7 +187,7 @@ html_table.xml_node <- function(
     )
   }
 
-  table_parse(x, header, trim, dec, na.strings, convert, html_text)
+  table_parse(x, header, trim, dec, na.strings, convert, html_text, trace)
 }
 
 #'
@@ -166,13 +199,15 @@ html_table2 <- function(
   trim = TRUE,
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
   check_bool(header, allow_na = TRUE)
   check_bool(trim)
   check_string(dec)
   check_character(na.strings)
   check_bool(convert)
+  check_bool(trace)
 
   UseMethod("html_table2")
 }
@@ -184,7 +219,8 @@ html_table2.xml_document <- function(
   trim = TRUE,
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
   tables <- xml2::xml_find_all(x, ".//table")
   html_table2(
@@ -193,7 +229,8 @@ html_table2.xml_document <- function(
     trim = trim,
     dec = dec,
     na.strings = na.strings,
-    convert = convert
+    convert = convert,
+    trace = trace
   )
 }
 
@@ -204,7 +241,8 @@ html_table2.xml_nodeset <- function(
   trim = TRUE,
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
   lapply(
     x,
@@ -213,7 +251,8 @@ html_table2.xml_nodeset <- function(
     trim = trim,
     dec = dec,
     na.strings = na.strings,
-    convert = convert
+    convert = convert,
+    trace = trace
   )
 }
 
@@ -224,9 +263,10 @@ html_table2.xml_node <- function(
   trim = TRUE,
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
-  table_parse(x, header, trim, dec, na.strings, convert, html_text2)
+  table_parse(x, header, trim, dec, na.strings, convert, html_text2, trace)
 }
 
 table_parse <- function(
@@ -236,7 +276,8 @@ table_parse <- function(
   dec,
   na.strings,
   convert,
-  text_fun
+  text_fun,
+  trace = FALSE
 ) {
   ns <- xml2::xml_ns(x)
   rows <- xml2::xml_find_all(x, ".//tr", ns = ns)
@@ -244,7 +285,37 @@ table_parse <- function(
   cells <- compact(cells)
 
   if (length(cells) == 0) {
+    if (isTRUE(trace)) {
+      return(table_trace_empty())
+    }
     return(tibble::tibble())
+  }
+
+  if (isTRUE(trace)) {
+    # The trace parser owns grid construction so that provenance ids and
+    # output values always share one coordinate system (in particular,
+    # nested tables never contribute rows or columns).
+    traced <- table_trace_parse(x, trim = trim, text_fun = text_fun)
+    out <- table_trace_values(traced)
+
+    if (is.na(header)) {
+      header <- length(traced$first_row_tags) > 0L &&
+        all(traced$first_row_tags == "th")
+    }
+    if (header) {
+      col_names <- out[1, , drop = FALSE]
+      out <- out[-1, , drop = FALSE]
+    } else {
+      col_names <- paste0("X", seq_len(ncol(out)))
+    }
+    colnames(out) <- col_names
+    df <- tibble::as_tibble(out, .name_repair = "minimal")
+    if (isTRUE(convert)) {
+      df[] <- lapply(df, function(x) {
+        utils::type.convert(x, as.is = TRUE, dec = dec, na.strings = na.strings)
+      })
+    }
+    return(table_trace_final(traced, df, header))
   }
 
   out <- table_fill(cells, trim = trim, text_fun = text_fun)
@@ -269,6 +340,110 @@ table_parse <- function(
   }
 
   df
+}
+
+# Build the text matrix corresponding to a trace grid, looking each cell
+# id up in the registry. Empty slots (padded missing cells) become NA,
+# and a spanning cell's text is repeated across every slot it covers.
+table_trace_values <- function(traced) {
+  grid <- traced$grid
+  if (length(grid) == 0L) {
+    return(matrix(NA_character_, 0L, 0L))
+  }
+  text <- traced$registry$text
+  names(text) <- traced$registry$cell_id
+  out <- unname(text[grid])
+  dim(out) <- dim(grid)
+  out
+}
+
+# Assemble the final trace object, aligning the provenance grid with the
+# tibble actually returned (dropping the header row when removed).
+table_trace_final <- function(traced, df, header) {
+  grid <- traced$grid
+  if (isTRUE(header) && nrow(grid) > 0L) {
+    grid <- grid[-1L, , drop = FALSE]
+  }
+  # Padding rows generated by trailing rowspans have no <tr>; the grid
+  # already covers them, so no adjustment is needed beyond matching the
+  # tibble dimensions.
+  body <- grid[, seq_len(ncol(df)), drop = FALSE]
+  dimnames(body) <- list(NULL, names(df))
+
+  if (length(traced$problems) > 0L) {
+    cli::cli_warn(c(
+      "Table source tracing found {length(traced$problems)} problem{?s}:",
+      stats::setNames(
+        paste0(traced$problems, "."),
+        rep("*", length(traced$problems))
+      )
+    ))
+  }
+
+  structure(
+    list(
+      data = df,
+      cells = traced$registry,
+      body = body,
+      problems = traced$problems
+    ),
+    class = "rvest_table_trace"
+  )
+}
+
+table_trace_empty <- function() {
+  structure(
+    list(
+      data = tibble::tibble(),
+      cells = table_trace_empty_registry(),
+      body = matrix(NA_character_, 0L, 0L),
+      problems = character()
+    ),
+    class = "rvest_table_trace"
+  )
+}
+
+table_trace_empty_registry <- function() {
+  tibble::tibble(
+    cell_id = character(),
+    html_id = character(),
+    tag = character(),
+    row = integer(),
+    col = integer(),
+    rowspan = integer(),
+    colspan = integer(),
+    covers = list(),
+    row_group = character(),
+    text = character(),
+    headers = list()
+  )
+}
+
+#' @export
+print.rvest_table_trace <- function(x, ...) {
+  cat("<rvest_table_trace>\n")
+  cat(
+    nrow(x$cells),
+    " source cell",
+    if (nrow(x$cells) == 1L) "" else "s",
+    ", ",
+    nrow(x$body),
+    " output row",
+    if (nrow(x$body) == 1L) "" else "s",
+    "\n",
+    sep = ""
+  )
+  if (length(x$problems) > 0L) {
+    cat(
+      length(x$problems),
+      " problem",
+      if (length(x$problems) == 1L) "" else "s",
+      " (see $problems)\n",
+      sep = ""
+    )
+  }
+  print(x$data)
+  invisible(x)
 }
 
 # Table fillng algorithm --------------------------------------------------

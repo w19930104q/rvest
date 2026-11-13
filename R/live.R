@@ -653,7 +653,8 @@ html_table.LiveHTML <- function(
   fill = deprecated(),
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 ) {
   tables <- html_elements(x, "table")
   html_table(
@@ -663,7 +664,8 @@ html_table.LiveHTML <- function(
     fill = fill,
     dec = dec,
     na.strings = na.strings,
-    convert = convert
+    convert = convert,
+    trace = trace
   )
 }
 #' @export

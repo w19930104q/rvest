@@ -6,6 +6,7 @@
 * `html_form_submit()` now only submits checked checkboxes and radio buttons (not all of them), and `html_form_set()` now sets the checked state of checkbox and radio button fields instead of their values (#316).
 * `html_form_submit()` once again supports file uploads: file fields set to `httr::upload_file()` objects are no longer mangled into strings (#320).
 * `html_table()` now always warns when `fill` is supplied; previously `fill = TRUE` was silently accepted, so many packages never saw the deprecation.
+* `html_table()` and `html_table2()` gain a `trace` argument. When `trace = TRUE`, the result includes source provenance for every cell: a stable in-table id, its row/column coverage, the raw cell text, associated header ids (explicit `headers` attributes take precedence over `scope`), plus diagnostics for dangling references and duplicate ids. Nested tables never contribute outer rows or columns, and provenance coordinates stay aligned after type conversion, `NA` handling, and header removal.
 * New `html_table2()` is like `html_table()` but uses `html_text2()` to extract cell text, so `<br>` elements become newlines and cell text more closely resembles how it appears in a browser (#361).
 * `html_text2()` now converts `<br>` to a line break when it is nested inside an inline element like `<span>` (#351). It also no longer includes the text of HTML comments.
 * `html_text2()` no longer drops spaces between inline elements when the space is in a separate element (e.g. `<span>a</span><span> </span><span>b</span>`) (#372).

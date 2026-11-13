@@ -12,7 +12,8 @@ html_table(
   fill = deprecated(),
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 )
 
 html_table2(
@@ -21,7 +22,8 @@ html_table2(
   trim = TRUE,
   dec = ".",
   na.strings = "NA",
-  convert = TRUE
+  convert = TRUE,
+  trace = FALSE
 )
 }
 \arguments{
@@ -47,11 +49,26 @@ if \code{convert} is \code{TRUE}.}
 
 \item{convert}{If \code{TRUE}, will run \code{\link[=type.convert]{type.convert()}} to interpret texts as
 logical, integer, double, or \code{NA}.}
+
+\item{trace}{If \code{TRUE}, additionally return source provenance for every
+cell in the output. The result becomes an \code{rvest_table_trace} list with
+components \code{data} (the usual tibble), \code{cells} (a registry of every
+source \verb{td}/\verb{th} with a stable in-table id, its coverage, raw text, and
+associated header ids), \code{body} (a matrix of cell ids aligned with the
+rows and columns of \code{data}), and \code{problems} (a character vector of
+diagnostics, e.g. dangling \code{headers} references or duplicate element
+ids). Cell ids have the form \code{r\{row\}c\{col\}} for the anchor position of
+each cell; \code{NA} slots in \code{body} are padded missing cells. Explicit
+\code{headers} attributes take precedence over \code{scope}-based association,
+and cells with no associated headers contain an empty character vector.}
 }
 \value{
 When applied to a single element, \code{html_table()} returns a single tibble.
 When applied to multiple elements or a document, \code{html_table()} returns
 a list of tibbles.
+
+If \code{trace = TRUE}, each tibble is instead wrapped in an
+\code{rvest_table_trace} list as described in the \code{trace} argument.
 }
 \description{
 \code{html_table()} parses a \verb{<table>} element into a data frame, following
@@ -106,4 +123,16 @@ sample4 <- minimal_html("<table>
 </table>")
 sample4 |> html_element("table") |> html_table()
 sample4 |> html_element("table") |> html_table2()
+
+# Use trace = TRUE to keep the source provenance of every value
+sample5 <- minimal_html("<table>
+  <tr><th scope='col'>a</th><th scope='col'>b</th></tr>
+  <tr><td rowspan='2'>1</td><td>2</td></tr>
+  <tr><td>3</td></tr>
+</table>")
+traced <- sample5 |>
+  html_element("table") |>
+  html_table(trace = TRUE)
+traced$body
+traced$cells
 }
